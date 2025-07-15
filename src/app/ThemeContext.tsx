@@ -56,7 +56,6 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
       const found = themes.find((t) => t.name === stored);
       if (found) setThemeState(found);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

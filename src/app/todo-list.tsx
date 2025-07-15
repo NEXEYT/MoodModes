@@ -7,6 +7,7 @@ import { useTheme } from "./ThemeContext";
 import { getThemeConfig } from "./themeConfig";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import Image from "next/image";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import utc from "dayjs/plugin/utc";
@@ -28,19 +29,6 @@ interface Task {
 
 export default function TodoList() {
   // Returns notification stage (1, 2, 3) based on deadline proximity
-  function getNotificationStage(task: Task): number | null {
-    if (task.done) return null;
-    const now = dayjs();
-    const deadline = dayjs(task.deadline);
-    const diffMs = deadline.diff(now);
-    if (diffMs <= 0) return null; // Past deadline
-    const diffDays = deadline.diff(now, 'day');
-    const diffHours = deadline.diff(now, 'hour');
-    if (diffDays > 1) return 1; // More than 1 day left
-    if (diffDays === 1 || (diffDays === 0 && diffHours > 1)) return 2; // 1 day or less, but more than 1 hour
-    if (diffHours <= 1 && diffHours >= 0) return 3; // 1 hour or less
-    return null;
-  }
   const [tasks, setTasks] = useState<Task[]>([]);
   const [input, setInput] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -49,7 +37,6 @@ export default function TodoList() {
   const [loading, setLoading] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ [id: number]: { timeoutId: NodeJS.Timeout, expiresAt: number } }>({});
   const [, forceUpdate] = useState(0);
-  const [notifTriggers] = useState<{ [id: number]: boolean }>({});
   //
   const { theme } = useTheme();
   const themeConfig = getThemeConfig(theme.name);
@@ -95,30 +82,6 @@ export default function TodoList() {
     setDescription("");
     setType("");
   }
-  async function toggleTask(id: number, done: boolean) {
-    if (!done) {
-      await supabase.from("tasks").update({ done: true }).eq("id", id);
-      setTasks(tasks => tasks.map(task => task.id === id ? { ...task, done: true } : task));
-      const expiresAt = Date.now() + 7000;
-      const timeoutId = setTimeout(() => {
-        deleteTask(id);
-      }, 7000);
-      setPendingDelete(prev => ({ ...prev, [id]: { timeoutId, expiresAt } }));
-      const interval = setInterval(() => forceUpdate(n => n + 1), 1000);
-      setTimeout(() => clearInterval(interval), 7000);
-    } else {
-      if (pendingDelete[id]) {
-        clearTimeout(pendingDelete[id].timeoutId);
-        setPendingDelete(prev => {
-          const copy = { ...prev };
-          delete copy[id];
-          return copy;
-        });
-      }
-      await supabase.from("tasks").update({ done: false }).eq("id", id);
-      setTasks(tasks => tasks.map(task => task.id === id ? { ...task, done: false } : task));
-    }
-  }
   async function deleteTask(id: number) {
     setTasks(tasks => tasks.filter(task => task.id !== id));
     setPendingDelete(prev => {
@@ -142,10 +105,12 @@ export default function TodoList() {
             src={themeConfig.backgroundMedia}
           />
         ) : (
-          <img
+          <Image
             src={themeConfig.backgroundMedia}
             alt="Theme background"
             className="absolute inset-0 w-full h-full object-cover z-0"
+            fill
+            priority
           />
         )
       )}
@@ -225,12 +190,7 @@ export default function TodoList() {
               <TaskItem
                 key={task.id}
                 task={task}
-                notifTrigger={!!notifTriggers[task.id]}
-                getNotificationStage={getNotificationStage}
-                onTriggerNotif={() => {}} // No-op for now
-                onDelete={(id) => {
-                  setTasks(tasks => tasks.filter(t => t.id !== id));
-                }}
+                onDelete={deleteTask}
               />
             ))}
           </AnimatePresence>
